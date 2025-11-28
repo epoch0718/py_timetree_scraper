@@ -1,0 +1,114 @@
+# GitHub Actionsワークフローファイル
+# ファイル名: .github/workflows/main.yml
+
+name: Scrape TimeTree and Update G-Calendar
+
+on:
+  #schedule:
+  #  - cron: "0 */1 * * *"
+  workflow_dispatch:
+
+jobs:
+  scrape-and-update:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Tokyo
+
+    steps:
+      # 1. リポジトリのコードをチェックアウト
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Python環境をセットアップ
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip' # pipのキャッシュはこれが一番シンプルで十分
+
+      # 3. 依存ライブラリをインストール
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+      
+      # ★★★ ここからがQiita記事のアイデアを取り入れた修正部分 ★★★
+      # https://qiita.com/ohakutsu/items/8e4c10cad360bf4cda04
+
+      # 4. Playwrightのバージョンを取得
+      - name: Get Playwright version
+        id: playwright-version
+        run: |
+          echo "VERSION=$(pip show playwright | grep Version | cut -d ' ' -f 2)" >> $GITHUB_ENV
+      
+      # 5. Playwrightのブラウザをキャッシュ
+      #    キャッシュキーにPlaywrightのバージョンを含める
+      - name: Cache Playwright browsers
+        id: cache-playwright # このステップにIDを付けて後で参照する
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ env.VERSION }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-${{ env.VERSION }}-
+
+      # 6. Playwrightのブラウザと依存関係をインストール
+      #    【重要】キャッシュがヒットしなかった場合のみ、このステップを実行する
+      - name: Install Playwright browsers and dependencies
+        if: steps.cache-playwright.outputs.cache-hit != 'true'
+        run: playwright install --with-deps
+
+      # ★★★ 修正ここまで ★★★
+
+      # 7. Pythonスクリプトを実行
+      - name: Run scraper script
+        env:
+          TIMETREE_EMAIL: ${{ secrets.TIMETREE_EMAIL }}
+          TIMETREE_PASSWORD: ${{ secrets.TIMETREE_PASSWORD }}
+          TIMETREE_CALENDAR_URL: ${{ secrets.TIMETREE_CALENDAR_URL }}
+          GAS_WEBAPP_URL: ${{ secrets.GAS_WEBAPP_URL }}
+        run: python timetree_scraper_week.py
+
+      # 8. 実行結果をジョブサマリーに計算して出力
+      - name: Calculate and Post Execution Summary
+        # ジョブが成功しても失敗しても、必ずこのステップを実行する
+        if: always()
+        # 公式のgithub-scriptアクションを使用
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // ワークフローの開始時刻と現在時刻（このステップの実行時刻）を取得
+            const startTime = new Date('${{ job.started_at }}');
+            const endTime = new Date();
+            
+            // ミリ秒単位で差を計算
+            const durationMs = endTime - startTime;
+            
+            // 分と秒に変換
+            const minutes = Math.floor(durationMs / 60000);
+            const seconds = ((durationMs % 60000) / 1000).toFixed(0);
+            const durationStr = `${minutes}分 ${seconds}秒`;
+
+            const jstOptions = {
+              timeZone: 'Asia/Tokyo',
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', second: '2-digit',
+              hour12: false // 24時間表記
+            };
+
+            // JSTに変換した文字列を取得
+            //const startTimeJST = startTime.toLocaleString('ja-JP', jstOptions);
+            const endTimeJST = endTime.toLocaleString('ja-JP', jstOptions);
+            
+            // ジョブサマリーを生成
+            await core.summary
+              .addHeading('実行結果サマリー', 2) // h2見出し
+              .addList([
+                `ワークフロー名 : ${{ github.workflow }}`,
+                `実行トリガー   : \`${{ github.event_name }}\``,
+                `ステータス     : ${'${{ job.status }}' === 'success' ? ' 成功 ✅' : ' 失敗 ❌'}`
+              ])
+              .addHeading('実行日時', 3) // h3見出し
+              .addTable([
+                [ {data: '終了 (JST)', header: true} ],
+                [  endTimeJST ]
+              ])
+              .write(); // サマリーに書き込む

@@ -142,10 +142,7 @@ def get_existing_notion_pages(date_start, date_end):
 
 # --- 3. 非同期APIヘルパー関数 (書き込み高速化用) ---
 
-AUTO_IMAGE_CAPTION = "TimeTree Auto Image"
-
-
-async def call_notion_api_async(session, endpoint, method="POST", data=None, params=None, max_retries=5):
+async def call_notion_api_async(session, endpoint, method="POST", data=None, max_retries=5):
     """
     非同期でNotion APIを呼び出す (aiohttp使用)
     レート制限(429)のハンドリングを含む
@@ -159,7 +156,7 @@ async def call_notion_api_async(session, endpoint, method="POST", data=None, par
 
     for attempt in range(max_retries):
         try:
-            async with session.request(method, url, headers=headers, json=data, params=params) as response:
+            async with session.request(method, url, headers=headers, json=data) as response:
                 if response.status == 429:
                     # レート制限: Notionから返ってくるRetry-Afterヘッダを見るか、デフォルト2秒待つ
                     retry_after = int(response.headers.get("Retry-After", 2))
@@ -177,83 +174,6 @@ async def call_notion_api_async(session, endpoint, method="POST", data=None, par
             raise e
             
     raise Exception("Max retries exceeded in async call")
-
-
-async def append_image_blocks(session, page_id, image_urls):
-    """
-    指定したNotionページ本文に外部画像ブロックを追加する
-    """
-    await cleanup_auto_image_blocks(session, page_id)
-
-    blocks = []
-    for url in image_urls:
-        if not url:
-            continue
-        blocks.append({
-            "object": "block",
-            "type": "image",
-            "image": {
-                "type": "external",
-                "external": {"url": url},
-                "caption": [
-                    {
-                        "type": "text",
-                        "text": {"content": AUTO_IMAGE_CAPTION}
-                    }
-                ]
-            }
-        })
-
-    if not blocks:
-        return
-
-    try:
-        await call_notion_api_async(
-            session,
-            f"/blocks/{page_id}/children",
-            "PATCH",
-            {"children": blocks}
-        )
-    except Exception as e:
-        print(f"    [Warn] Failed to append image blocks: {e}")
-
-
-async def cleanup_auto_image_blocks(session, page_id):
-    """
-    過去に自動追加した画像ブロック（キャプション一致）を削除する
-    """
-    next_cursor = None
-    try:
-        while True:
-            params = {"page_size": 100}
-            if next_cursor:
-                params["start_cursor"] = next_cursor
-
-            data = await call_notion_api_async(
-                session,
-                f"/blocks/{page_id}/children",
-                "GET",
-                params=params
-            )
-
-            for block in data.get("results", []):
-                if block.get("type") != "image":
-                    continue
-                caption = block["image"].get("caption", [])
-                if any(item.get("plain_text") == AUTO_IMAGE_CAPTION for item in caption):
-                    block_id = block.get("id")
-                    if block_id:
-                        await call_notion_api_async(
-                            session,
-                            f"/blocks/{block_id}",
-                            "DELETE"
-                        )
-
-            if not data.get("has_more"):
-                break
-            next_cursor = data.get("next_cursor")
-    except Exception as e:
-        print(f"    [Warn] Failed to cleanup image blocks: {e}")
 
 async def sync_single_event_async(session, semaphore, event, existing_page_id):
     """
@@ -305,7 +225,6 @@ async def sync_single_event_async(session, semaphore, event, existing_page_id):
             }
 
         try:
-            page_id = existing_page_id
             if existing_page_id:
                 # 更新 (PATCH)
                 await call_notion_api_async(
@@ -321,21 +240,13 @@ async def sync_single_event_async(session, semaphore, event, existing_page_id):
                     "parent": {"database_id": NOTION_DATABASE_ID},
                     "properties": properties
                 }
-                created_page = await call_notion_api_async(
+                await call_notion_api_async(
                     session, 
                     "/pages", 
                     "POST", 
                     payload
                 )
-                page_id = created_page.get("id")
                 print(f"  [Created] {event['title']}")
-
-            if page_id and (event.get("url1") or event.get("url2")):
-                await append_image_blocks(
-                    session,
-                    page_id,
-                    [event.get("url1"), event.get("url2")]
-                )
             
             # 成功したらNoneを返す
             return None

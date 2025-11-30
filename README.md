@@ -114,6 +114,16 @@ Secrets 一覧の例:
 
 初回は `workflow_dispatch` で手動起動し、ログに `Restore .env from secret` / `Restore private scraper` が成功しているか確認してください。
 
+### バックアップ戦略（秘密ファイルの保管）
+
+このリポジトリは公開状態のため、`private_scraper.py` と `.env` はコミットしていません。ローカルから誤って削除した際の保険として、以下の運用を推奨します。
+
+1. GitHub で `py_timetree_scraper_private_scraper` などの **非公開リポジトリ** を作成。
+2. `private_scraper.py`（必要に応じて `.env` も）をそのリポジトリに commit & push しておく。
+3. ローカルで紛失した場合は、Private リポジトリから `git clone` して復元する。
+
+アクセス権限は最小限にし、必要に応じてパスワードマネージャや Secret Manager も併用してください。
+
 ## コード内のカスタマイズ設定
 
 `timetree_notion_week.py` 内の以下の箇所は、必要に応じて変更してください。

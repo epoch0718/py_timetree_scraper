@@ -50,6 +50,8 @@ NOTION_API_KEY=secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
+GitHub Actions で実行する際は `.env` の中身をそのまま `ENV_FILE` という Repository Secret に登録し、ワークフロー内で `printf '%s' "$ENV_FILE" > .env` として復元します（既存の `.env_sample` をテンプレートにして内容を貼り付けるだけでOKです）。
+
 ### 2. Notionデータベースの準備
 
 同期先のNotionデータベースには、以下のプロパティ（列）が必須です。  
@@ -63,6 +65,23 @@ NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 | **TimeTreeID** | テキスト (Text) | **必須**。同期用のIDを管理します |
 | **URL1** | ファイルとメディア | 1枚目の画像URLが入ります |
 | **URL2** | ファイルとメディア | 2枚目の画像URLが入ります |
+
+### 3. スクレイピング関数の分離 (`private_scraper.py`)
+
+TimeTree の週次スクレイピングロジックは `private_scraper.py` に退避しており、リポジトリには含めません。  
+ローカルで実行する場合は、元々 `timetree_notion_week.py` にあった `scrape_one_week_events` の内容を `private_scraper.py` としてプロジェクトルートに置いてください（`.gitignore` 済み）。
+
+GitHub Actions では `private_scraper.py` の全文を `PRIVATE_SCRAPER` という Secret に登録し、ワークフロー内で下記のように復元します。
+
+```yaml
+- name: Restore private scraper
+  run: |
+    printf '%s' "$PRIVATE_SCRAPER" > private_scraper.py
+  env:
+    PRIVATE_SCRAPER: ${{ secrets.PRIVATE_SCRAPER }}
+```
+
+存在しない状態でスクリプトを実行すると `RuntimeError` で停止するので、Secret の設定漏れにすぐ気付けます。
 
 ## 実行方法
 
@@ -78,6 +97,23 @@ python timetree_notion_week.py
 3.  Notionから既存のデータを取得し、差分を確認します。
 4.  新規・更新が必要なデータをNotionに一括送信（非同期）します。
 
+## GitHub Actions での自動実行
+
+`.github/workflows/main.yml` では以下を実装しています。
+
+* `schedule: "*/10 * * * *"` により 10 分ごとに自動実行（`workflow_dispatch` で手動実行も可能）
+* Secrets から `.env`（`ENV_FILE`）と `private_scraper.py`（`PRIVATE_SCRAPER`）を復元
+* Playwright のブラウザバイナリをキャッシュし、`timetree_notion_week.py` を起動
+
+Secrets 一覧の例:
+
+| 名前 | 説明 |
+| --- | --- |
+| `ENV_FILE` | `.env` の全文。改行付きでそのまま貼り付ける |
+| `PRIVATE_SCRAPER` | `private_scraper.py` の全文 |
+
+初回は `workflow_dispatch` で手動起動し、ログに `Restore .env from secret` / `Restore private scraper` が成功しているか確認してください。
+
 ## コード内のカスタマイズ設定
 
 `timetree_notion_week.py` 内の以下の箇所は、必要に応じて変更してください。
@@ -90,3 +126,4 @@ python timetree_notion_week.py
 
 *   TimeTreeのWebサイト構造が変更された場合、スクレイピング（CSSセレクタ）が機能しなくなる可能性があります。
 *   Notion APIのレート制限（Rate Limits）を考慮し、非同期処理の同時実行数はコード内で制限されています（`semaphore`設定）。
+*   GitHub Actions のスケジュール実行は Free プランだと制約があります。利用状況に応じて Cron 間隔を調整してください。

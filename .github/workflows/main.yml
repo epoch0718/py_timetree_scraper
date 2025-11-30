@@ -33,18 +33,14 @@ jobs:
       # 3.5 Secrets から .env を復元
       - name: Restore .env from secret
         run: |
-          cat <<'EOF' > .env
-          $ENV_FILE
-          EOF
+          printf '%s' "$ENV_FILE" > .env
         env:
           ENV_FILE: ${{ secrets.ENV_FILE }}
 
       # 3.6 Secrets から private_scraper.py を復元
       - name: Restore private scraper
         run: |
-          cat <<'EOF' > private_scraper.py
-          $PRIVATE_SCRAPER
-          EOF
+          printf '%s' "$PRIVATE_SCRAPER" > private_scraper.py
         env:
           PRIVATE_SCRAPER: ${{ secrets.PRIVATE_SCRAPER }}
       

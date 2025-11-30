@@ -1,11 +1,11 @@
 # GitHub Actionsワークフローファイル
 # ファイル名: .github/workflows/main.yml
 
-name: Scrape TimeTree and Update G-Calendar
+name: Scrape TimeTree and Update Notion
 
 on:
-  #schedule:
-  #  - cron: "0 */1 * * *"
+  schedule:
+    - cron: "*/10 * * * *" # 10分ごとに実行
   workflow_dispatch:
 
 jobs:
@@ -29,6 +29,24 @@ jobs:
       # 3. 依存ライブラリをインストール
       - name: Install Python dependencies
         run: pip install -r requirements.txt
+
+      # 3.5 Secrets から .env を復元
+      - name: Restore .env from secret
+        run: |
+          cat <<'EOF' > .env
+          $ENV_FILE
+          EOF
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+
+      # 3.6 Secrets から private_scraper.py を復元
+      - name: Restore private scraper
+        run: |
+          cat <<'EOF' > private_scraper.py
+          $PRIVATE_SCRAPER
+          EOF
+        env:
+          PRIVATE_SCRAPER: ${{ secrets.PRIVATE_SCRAPER }}
       
       # ★★★ ここからがQiita記事のアイデアを取り入れた修正部分 ★★★
       # https://qiita.com/ohakutsu/items/8e4c10cad360bf4cda04
@@ -60,12 +78,7 @@ jobs:
 
       # 7. Pythonスクリプトを実行
       - name: Run scraper script
-        env:
-          TIMETREE_EMAIL: ${{ secrets.TIMETREE_EMAIL }}
-          TIMETREE_PASSWORD: ${{ secrets.TIMETREE_PASSWORD }}
-          TIMETREE_CALENDAR_URL: ${{ secrets.TIMETREE_CALENDAR_URL }}
-          GAS_WEBAPP_URL: ${{ secrets.GAS_WEBAPP_URL }}
-        run: python timetree_scraper_week.py
+        run: python timetree_notion_week.py
 
       # 8. 実行結果をジョブサマリーに計算して出力
       - name: Calculate and Post Execution Summary

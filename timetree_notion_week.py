@@ -6,7 +6,6 @@ import asyncio
 import aiohttp # 追加: 非同期通信用
 from playwright.sync_api import sync_playwright
 from dotenv import load_dotenv
-import re
 from datetime import datetime, timedelta
 import time
 
@@ -33,18 +32,6 @@ NOTION_PROPS = {
 }
 
 # --- 2. ヘルパー関数 (同期: 読み取り用) ---
-
-def parse_weekly_time(date_str, time_str):
-    """
-    TimeTreeの表示形式から時間を抽出する
-    """
-    if not time_str:
-        return None
-    match = re.search(r'(\d{1,2}:\d{2})', time_str)
-    if match:
-        return match.group(1) # "7:00" や "23:00" を返す
-    return None
-
 def call_notion_api_sync(endpoint, method="POST", data=None, max_retries=3):
     """
     Notion APIを呼び出す同期関数（既存データの読み取り用）
@@ -143,6 +130,17 @@ def get_existing_notion_pages(date_start, date_end):
 # --- 3. 非同期APIヘルパー関数 (書き込み高速化用) ---
 
 AUTO_IMAGE_CAPTION = "TimeTree Auto Image"
+
+
+try:
+    # 公開リポジトリには含めないスクレイピング関数を外部から読み込む
+    from private_scraper import scrape_one_week_events
+except ImportError:
+    def scrape_one_week_events(*_args, **_kwargs):
+        raise RuntimeError(
+            "scrape_one_week_events は private_scraper.py に移動しました。"
+            "ローカルでは private_scraper.py を配置し、CI では secrets から復元してください。"
+        )
 
 
 async def call_notion_api_async(session, endpoint, method="POST", data=None, params=None, max_retries=5):
@@ -382,120 +380,7 @@ async def process_sync_batch(all_events, map_by_id, map_by_key):
 
 
 # --- 4. スクレイピング関数 ---
-
-def scrape_one_week_events(page):
-    """
-    現在表示されている週のイベントを取得する。
-    """
-    events = []
-    
-    try:
-        month_year_locator = page.locator('time').first
-        month_year_locator.wait_for(state='visible', timeout=10000)
-        month_year_text = month_year_locator.inner_text()
-    except Exception as e:
-        print(f"Error reading header time: {e}")
-        return []
-
-    match = re.search(r'(\d{4})年(\d{1,2})月', month_year_text)
-    if not match:
-        return []
-    year, month = match.groups()
-    month_year = f"{year}-{month.zfill(2)}"
-    #print('month_year: ' + month_year)
-
-    if month_year == "2025-07":
-        return None,None
-
-    date_to_column = {}
-    day_number_elements = page.locator('[data-test-id="weekly-day-number"]').all()
-    for i, day_element in enumerate(day_number_elements):
-        day_text = day_element.locator('div').inner_text()
-        if day_text.isdigit():
-            date_to_column[str(i + 2)] = day_text
-
-    for col_index_str, day in date_to_column.items():
-        column_element = page.locator(f'div[column="{col_index_str}"]')
-        if column_element.count() == 0:
-            continue
-
-        event_elements_in_col = column_element.locator('div[data-grid-item="true"]').all()
-        date_str = f"{month_year}-{day.zfill(2)}"
-
-        for event_element in event_elements_in_col:
-            title_element = event_element.locator('h2.css-1j6im95')
-            time_element = event_element.locator('time.css-1sbza0d')
-
-            if title_element.count() == 0 or time_element.count() == 0:
-                continue
-
-            title = title_element.inner_text()
-            time_raw = time_element.inner_text()
-            time_parsed = parse_weekly_time(date_str, time_raw)
-            if not time_parsed:
-                continue
-            
-            memo = None
-            event_id = None
-            image_url1 = None
-            image_url2 = None
-            
-            try:
-                event_element.click(timeout=1000, force=True)
-                page.wait_for_timeout(600) 
-                
-                # --- ラベルカラー取得処理 ---
-                try:
-                    label_icon_pattern = "M5.931" 
-                    label_locator = page.locator(f'div.vjrcbi2:has(svg path[d^="{label_icon_pattern}"]) span.vjrcbi5')
-                    if label_locator.count() > 0:
-                        label_text = label_locator.first.inner_text()
-                        if label_text == 'ディープ・スカイブルー':
-                            continue
-                except Exception as label_err:
-                    print(f"    Label fetch error: {label_err}")
-
-                current_url = page.url
-                id_match = re.search(r'/events/([^/?]+)', current_url)
-                if id_match:
-                    event_id = id_match.group(1)
-                else:
-                    print(f"    Warning: No Event ID found in URL: {current_url}")
-
-                memo_element = page.locator('p.exlc7u1.vjrcbi0')
-                if memo_element.count() > 0:
-                    memo = memo_element.inner_text()
-
-                memo_url_elements = page.locator('img[alt="Sent by you"]')
-                count = memo_url_elements.count()
-                if count > 0:
-                    for i in range(count):
-                        url = memo_url_elements.nth(i).get_attribute('src')
-                        if i == 0:
-                            image_url1 = url
-                        elif i == 1:
-                            image_url2 = url
-                        #memo = (memo or "") + "\n" + f"[url{i+1}]{url}"
-                
-                close_button = page.get_by_label("閉じる", exact=True)
-                if close_button.count() > 0:
-                    close_button.click(timeout=1000)
-                    page.wait_for_timeout(300)
-
-            except Exception as e:
-                print(f"    Error details for '{title}': {e}")
-                
-            events.append({
-                'date': date_str,
-                'time': time_parsed,
-                'title': title.strip(),
-                'memo': memo,
-                'id': event_id,
-                'url1': image_url1,
-                'url2': image_url2
-            })
-            
-    return events,month_year
+# private_scraper.py 内で定義し、公開リポジトリでは import のみ行う
 
 
 # --- 5. メイン処理 ---

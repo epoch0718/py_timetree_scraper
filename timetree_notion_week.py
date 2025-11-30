@@ -395,7 +395,7 @@ def main():
     print("--- Starting TimeTree Scraper ---")
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            headless=False,
+            headless=True,#False 
             args=["--force-device-scale-factor=1.1"]
         )
         context = browser.new_context(

@@ -13,6 +13,10 @@ TimeTree の予定を Notion に同期する自動化を、**一切課金せず*
 
 ---
 
+## リポジトリのURL
+https://github.com/epoch0718/py_timetree_scraper.git
+git cloneしても使えません。　（笑）
+
 ## 仕組みの全体像
 
 1. **公開リポジトリ** にメインスクリプト (`timetree_notion_week.py`) とワークフロー (`.github/workflows/main.yml`) を置く  

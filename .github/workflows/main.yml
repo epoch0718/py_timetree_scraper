@@ -15,6 +15,10 @@ jobs:
       TZ: Asia/Tokyo
 
     steps:
+      # 0. 開始時刻を記録（サマリー用）
+      - name: Record start time
+        run: echo "WORKFLOW_START_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+
       # 1. リポジトリのコードをチェックアウト
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -85,7 +89,7 @@ jobs:
         with:
           script: |
             // ワークフローの開始時刻と現在時刻（このステップの実行時刻）を取得
-            const startTime = new Date('${{ job.started_at }}');
+            const startTime = new Date('${{ env.WORKFLOW_START_TIME }}');
             const endTime = new Date();
             
             // ミリ秒単位で差を計算

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+    }
+    
+    .container {
+      text-align: center;
+      padding: 3rem;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      max-width: 450px;
+      width: 90%;
+    }
+    
+    .logo {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(90deg, #00d9ff, #00ff88);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .subtitle {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+    
+    .status {
+      padding: 1.5rem;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+      min-height: 100px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+    
+    .status.loading {
+      background: rgba(255, 193, 7, 0.15);
+      border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+    
+    .status.success {
+      background: rgba(0, 255, 136, 0.15);
+      border: 1px solid rgba(0, 255, 136, 0.3);
+    }
+    
+    .status.error {
+      background: rgba(255, 82, 82, 0.15);
+      border: 1px solid rgba(255, 82, 82, 0.3);
+    }
+    
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 193, 7, 0.3);
+      border-top-color: #ffc107;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 1rem;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .status-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .status-message {
+      font-size: 1rem;
+      line-height: 1.5;
+    }
+    
+    .timestamp {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.5);
+      margin-top: 0.5rem;
+    }
+    
+    .retry-btn {
+      background: linear-gradient(135deg, #00d9ff, #00ff88);
+      border: none;
+      padding: 0.8rem 2rem;
+      border-radius: 30px;
+      color: #1a1a2e;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-family: 'Noto Sans JP', sans-serif;
+    }
+    
+    .retry-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(0, 217, 255, 0.3);
+    }
+    
+    .retry-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🌳</div>
+    <h1>TimeTree Scraper</h1>
+    <p class="subtitle">GitHub Actions ワークフロー実行</p>
+    
+    <div id="status" class="status loading">
+      <div class="spinner"></div>
+      <div class="status-message">ワークフローを実行中...</div>
+    </div>
+    
+    <button id="retryBtn" class="retry-btn" onclick="runWorkflow()" disabled>
+      再実行
+    </button>
+  </div>
+
+  <script>
+    // ページ読み込み時に自動実行
+    document.addEventListener('DOMContentLoaded', function() {
+      runWorkflow();
+    });
+    
+    function runWorkflow() {
+      const statusDiv = document.getElementById('status');
+      const retryBtn = document.getElementById('retryBtn');
+      
+      // ローディング状態に設定
+      statusDiv.className = 'status loading';
+      statusDiv.innerHTML = `
+        <div class="spinner"></div>
+        <div class="status-message">ワークフローを実行中...</div>
+      `;
+      retryBtn.disabled = true;
+      
+      // GASの関数を呼び出し
+      google.script.run
+        .withSuccessHandler(function(result) {
+          retryBtn.disabled = false;
+          
+          if (result.success) {
+            statusDiv.className = 'status success';
+            statusDiv.innerHTML = `
+              <div class="status-icon">✅</div>
+              <div class="status-message">${result.message}</div>
+              <div class="timestamp">${result.timestamp}</div>
+            `;
+          } else {
+            statusDiv.className = 'status error';
+            statusDiv.innerHTML = `
+              <div class="status-icon">❌</div>
+              <div class="status-message">${result.message}</div>
+              <div class="timestamp">${result.timestamp}</div>
+            `;
+          }
+        })
+        .withFailureHandler(function(error) {
+          retryBtn.disabled = false;
+          statusDiv.className = 'status error';
+          statusDiv.innerHTML = `
+            <div class="status-icon">❌</div>
+            <div class="status-message">エラー: ${error.message}</div>
+          `;
+        })
+        .triggerWorkflow();
+    }
+  </script>
+</body>
+</html>
+

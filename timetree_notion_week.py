@@ -312,7 +312,7 @@ async def sync_single_event_async(session, semaphore, event, existing_page_id):
                     "PATCH", 
                     {"properties": properties}
                 )
-                print(f"  [Updated] {event['title']}")
+                print(f"  [Updated] ")
             else:
                 # 新規作成 (POST)
                 payload = {
@@ -326,7 +326,7 @@ async def sync_single_event_async(session, semaphore, event, existing_page_id):
                     payload
                 )
                 page_id = created_page.get("id")
-                print(f"  [Created] {event['title']}")
+                print(f"  [Created] ")
 
             if page_id and (event.get("url1") or event.get("url2")):
                 await append_image_blocks(

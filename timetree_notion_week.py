@@ -430,7 +430,7 @@ def main():
             all_events.extend(events)
             print(f"[{month_year}] Found {len(events)} events")
 
-        for i in range(20):
+        for i in range(5):
             page.locator('button[value="previous"]').click()
             page.wait_for_load_state('networkidle')
             page.wait_for_timeout(500)

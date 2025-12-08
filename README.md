@@ -137,3 +137,55 @@ Secrets 一覧の例:
 *   TimeTreeのWebサイト構造が変更された場合、スクレイピング（CSSセレクタ）が機能しなくなる可能性があります。
 *   Notion APIのレート制限（Rate Limits）を考慮し、非同期処理の同時実行数はコード内で制限されています（`semaphore`設定）。
 *   GitHub Actions のスケジュール実行は Free プランだと制約があります。利用状況に応じて Cron 間隔を調整してください。
+
+## GitHub Actions 実行履歴の一括削除
+
+実行履歴（workflow runs）が大量に溜まった場合、GitHub CLI を使って一括削除できます。
+
+### GitHub CLI のインストール
+
+```bash
+# Windows (winget)
+winget install GitHub.cli
+
+# Mac (Homebrew)
+brew install gh
+```
+
+### ログイン
+
+```bash
+gh auth login
+```
+
+### 一括削除コマンド
+
+```powershell
+# PowerShell: 特定のワークフローの実行履歴を100件削除
+gh run list --workflow=main.yml --limit 100 --json databaseId --jq ".[].databaseId" | ForEach-Object { gh run delete $_ }
+
+# PowerShell: 全ワークフローの実行履歴を100件削除
+gh run list --limit 100 --json databaseId --jq ".[].databaseId" | ForEach-Object { gh run delete $_ }
+
+# PowerShell: 100件以上ある場合（ループで全削除）
+while ($true) {
+  $runs = gh run list --limit 100 --json databaseId --jq ".[].databaseId"
+  if (-not $runs) { break }
+  $runs | ForEach-Object { gh run delete $_ }
+}
+```
+
+```bash
+# Bash / Git Bash: ワンライナーで削除
+gh run list --limit 500 --json databaseId -q '.[].databaseId' | xargs -I {} gh run delete {}
+```
+
+### ステータスでフィルタリング
+
+```powershell
+# 成功した実行だけ削除
+gh run list --status success --limit 100 --json databaseId --jq ".[].databaseId" | ForEach-Object { gh run delete $_ }
+
+# 失敗した実行だけ削除
+gh run list --status failure --limit 100 --json databaseId --jq ".[].databaseId" | ForEach-Object { gh run delete $_ }
+```

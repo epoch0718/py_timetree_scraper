@@ -31,9 +31,53 @@ function getGitHubToken() {
  * HTMLページを表示
  */
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('index')
+  // HTMLファイルから読み込む方式
+  const html = HtmlService.createHtmlOutputFromFile('index')
     .setTitle('TimeTree Scraper Trigger')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  return html;
+}
+
+/**
+ * シンプルなテスト用（iPhone動作確認用）
+ * URLの末尾に ?test=1 を付けるとこちらが実行される
+ */
+function doGetSimple() {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>TimeTree Trigger</title>
+      <style>
+        body { font-family: sans-serif; padding: 20px; text-align: center; }
+        .btn { padding: 20px 40px; font-size: 18px; background: #4CAF50; color: white; border: none; border-radius: 10px; }
+        #result { margin-top: 20px; padding: 20px; }
+      </style>
+    </head>
+    <body>
+      <h1>TimeTree Scraper</h1>
+      <p id="status">読み込み中...</p>
+      <div id="result"></div>
+      <script>
+        google.script.run
+          .withSuccessHandler(function(r) {
+            document.getElementById('status').innerText = r.success ? '✅ 成功' : '❌ 失敗';
+            document.getElementById('result').innerText = r.message + ' (' + r.timestamp + ')';
+          })
+          .withFailureHandler(function(e) {
+            document.getElementById('status').innerText = '❌ エラー';
+            document.getElementById('result').innerText = e.message;
+          })
+          .triggerWorkflow();
+      </script>
+    </body>
+    </html>
+  `;
+  return HtmlService.createHtmlOutput(html)
+    .setTitle('TimeTree Trigger')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
 /**

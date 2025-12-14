@@ -6,3 +6,6 @@ bup/
 tests/
 qa*
 private_scraper.py
+instagram_auto_post.py
+instagram_config.py
+instagram_test_post.py
